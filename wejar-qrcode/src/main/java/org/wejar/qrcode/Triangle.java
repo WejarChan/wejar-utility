@@ -105,6 +105,13 @@ public class Triangle {
 		return ccw3;
 	}
 
+
+	@Override
+	public String toString() {
+		return "Triangle [point1=" + point1 + ", point2=" + point2 + ", point3=" + point3 + ", angle1=" + angle1
+				+ ", angle2=" + angle2 + ", angle3=" + angle3 + "]";
+	}
+
 	
 	
 	
