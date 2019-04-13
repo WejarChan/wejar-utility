@@ -66,6 +66,7 @@ public class QrCodeDetectCapture {
 	
     static{ 
     	try {
+    		System.out.println(System.getProperty("java.library.path"));
     		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 	    	hasLoadOpencv = true;
     	}catch(Throwable e) {
@@ -285,7 +286,7 @@ public class QrCodeDetectCapture {
     }
     
     private void debugOutput(String name, Mat src_gray) {
-    	if(!debugMode) {
+    	if(debugMode) {
         	String fileName = name+".jpg";
         	String absPath = debugOutputPath + fileName;
         	Imgcodecs.imwrite(absPath, src_gray);
@@ -441,4 +442,34 @@ public class QrCodeDetectCapture {
         Point point= new Point(centerx,centery);
         return point;
     }
+
+
+	public boolean isDebugMode() {
+		return debugMode;
+	}
+
+
+	public void setDebugMode(boolean debugMode) {
+		this.debugMode = debugMode;
+	}
+
+
+	public String getOutputPath() {
+		return outputPath;
+	}
+
+
+	public void setOutputPath(String outputPath) {
+		this.outputPath = outputPath;
+	}
+
+
+	public String getDebugOutputPath() {
+		return debugOutputPath;
+	}
+
+
+	public void setDebugOutputPath(String debugOutputPath) {
+		this.debugOutputPath = debugOutputPath;
+	}
 }
