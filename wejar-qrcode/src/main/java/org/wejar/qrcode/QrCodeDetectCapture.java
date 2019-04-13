@@ -41,9 +41,9 @@ public class QrCodeDetectCapture {
 	
 	static boolean hasLoadOpencv = false;
 	
-	private boolean debugMode = true;
+	private boolean debugMode = false;
 	
-	private String outputPath = "/home/wejarchan/Desktop/CVOUT";
+	private String captureOutputPath = "/home/wejarchan/Desktop/CVOUT";
 	
 	private String debugOutputPath = "/home/wejarchan/Desktop/CVDEBUG";
 	
@@ -75,9 +75,13 @@ public class QrCodeDetectCapture {
     }
     
     public static void main(String[] args) {
-    	String filePath = "/home/wejarchan/Desktop/123.jpg";
+    	String filePath = "/home/wejarchan/Desktop/10.jpg";
     	QrCodeDetectCapture qdc = new QrCodeDetectCapture();
-    	qdc.qrCodeCorrection(filePath);
+    	long startTime = System.currentTimeMillis();
+    	String path = qdc.qrCodeCorrection(filePath);
+    	long endTime = System.currentTimeMillis();
+    	System.out.println(endTime - startTime);
+    	System.out.println(path);
 	}
     
     
@@ -102,29 +106,53 @@ public class QrCodeDetectCapture {
     		return null;
     	}
         Mat src = Imgcodecs.imread(qrcodePicPath ,1);
-        Triangle triangle = detectQrCodeTrangle(src);
+        //使用100作为二值化的阀值进行三角形检测
+        Triangle triangle = detectQrCodeTrangle(src,100);
+        if(triangle == null) {
+        	logger.info("{}--100阀值检测不到三角形，使用80作为阀值检测三角形。");
+            triangle = detectQrCodeTrangle(src,80);
+        }
+        
         if(triangle == null) {
         	logger.info("{}--矫正失败，找不到定位二维码的三角形。",apiName);
         	return null;
         }
         logger.info("{}--找到定位二维码的三角形。triangle:{}",apiName,triangle.toString());
-        String outputFilePath = capture(triangle, src, outputPath);
+        String outputFilePath = capture(triangle, src, captureOutputPath);
         logger.info("{}--二维码矫正成功，输出文件路径:{}",apiName,outputFilePath);
         return outputFilePath;
     }
     
     
-    public Triangle detectQrCodeTrangle(Mat src) {
+    public Triangle detectQrCodeTrangle(Mat src,double thresh) {
         Mat src_gray = new Mat();
         List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
         List<MatOfPoint> markContours = new ArrayList<MatOfPoint>();
 
         
-        //TODO 图像大小调整，太大则压缩，太小则放大
-//        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+        //图像太大，压缩至短边小于1500
+        if(Math.min(src.width(), src.height()) > 1500) {
+        	int width = src.width();
+        	int height = src.height();
+        	do {
+        		width /= 2;
+        		height /= 2;
+        	}while(Math.min(width, height) > 1500);
+        	
+        	//短边小于1500，重设图片大小
+            Imgproc.resize(src,src,new Size(width,height));
+        }
+        
         /**图片太小就放大**/
-        if (src.width()*src.height()<90000){
-            Imgproc.resize(src,src,new Size(800,600));
+        if(Math.max(src.width(), src.height()) < 500) {
+        	int width = src.width();
+        	int height = src.height();
+        	do {
+        		width *= 2;
+        		height *= 2;
+        	}while(Math.max(width, height) < 500);
+        	//长边小于500，重设大小至长边大于500
+            Imgproc.resize(src,src,new Size(width,height));
         }
         
         Mat src_all=src.clone();
@@ -136,7 +164,7 @@ public class QrCodeDetectCapture {
         Imgproc.GaussianBlur(src_gray, src_gray, new Size(3,3), 0);
         debugOutput("2_平滑处理",src_gray);
         
-        Imgproc.threshold(src_gray, src_gray, 80, 255,Imgproc.THRESH_BINARY_INV);
+        Imgproc.threshold(src_gray, src_gray, thresh, 255,Imgproc.THRESH_BINARY_INV);
         debugOutput("3_二值化处理",src_gray);
 
         
@@ -310,6 +338,8 @@ public class QrCodeDetectCapture {
     		return null;
     	}
     	
+    	System.out.println("进行矫正的三角形:"+triangle.toString());
+    	
     	if(!outputPath.endsWith(File.separatorChar+"")) {
     		outputPath += (File.separatorChar+"");
     	}
@@ -336,12 +366,7 @@ public class QrCodeDetectCapture {
         Imgproc.line(sline ,point1,point2 ,new Scalar(0,0,255),2);
         Imgproc.line(sline ,point2,point3 ,new Scalar(0,0,255),2);
         Imgproc.line(sline ,point1,point3 ,new Scalar(0,0,255),2);
-        
-        if(!debugMode) {
-        	String fileName = "划线处理.jpg";
-        	String absPath = outputPath + fileName;
-        	Imgcodecs.imwrite(absPath, sline);
-        }
+        debugOutput("划线处理", sline);
 
         Point[] poly= new Point[4];
         if(angle3>angle2 && angle3>angle1)
@@ -448,21 +473,9 @@ public class QrCodeDetectCapture {
 		return debugMode;
 	}
 
-
 	public void setDebugMode(boolean debugMode) {
 		this.debugMode = debugMode;
 	}
-
-
-	public String getOutputPath() {
-		return outputPath;
-	}
-
-
-	public void setOutputPath(String outputPath) {
-		this.outputPath = outputPath;
-	}
-
 
 	public String getDebugOutputPath() {
 		return debugOutputPath;
@@ -471,5 +484,15 @@ public class QrCodeDetectCapture {
 
 	public void setDebugOutputPath(String debugOutputPath) {
 		this.debugOutputPath = debugOutputPath;
+	}
+
+
+	public String getCaptureOutputPath() {
+		return captureOutputPath;
+	}
+
+
+	public void setCaptureOutputPath(String captureOutputPath) {
+		this.captureOutputPath = captureOutputPath;
 	}
 }
