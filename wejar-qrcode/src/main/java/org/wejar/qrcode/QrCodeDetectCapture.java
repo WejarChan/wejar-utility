@@ -113,6 +113,10 @@ public class QrCodeDetectCapture {
 			logger.info("{}--100阀值检测不到三角形，使用80作为阀值检测三角形。");
 			triangle = detectQrCodeTrangle(src, 80);
 		}
+		if (triangle == null) {
+			logger.info("{}--100阀值检测不到三角形，使用80作为阀值检测三角形。");
+			triangle = detectQrCodeTrangle(src, 60);
+		}
 
 		if (triangle == null) {
 			logger.info("{}--矫正失败，找不到定位二维码的三角形。", apiName);
