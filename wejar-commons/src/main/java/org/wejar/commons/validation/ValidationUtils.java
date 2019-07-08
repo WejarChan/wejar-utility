@@ -102,8 +102,16 @@ public class ValidationUtils {
         if(annons != null) {
         	
         	for(int i=0; i<annons.length; ++i) {
-        		Annotation[] arr = annons[i];
-        		if(arr.length > 0) {
+        		Annotation[] annonArr = annons[i];
+        		
+        		
+        		
+        		if(annonArr.length > 0) {
+        			
+        			
+        			//只检查javax.validation  org.hibernate.validator  的包
+//        			annonArr[0].annotationType().getPackage().toString()
+        			
         			Object param = args[i];
         			List<FieldErrorInfo> list = ValidationUtils.validate(param);
         			fieldErrors.addAll(list);

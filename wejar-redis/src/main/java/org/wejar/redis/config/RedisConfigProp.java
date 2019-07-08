@@ -10,7 +10,6 @@ public class RedisConfigProp {
 
     
     public RedisConfigProp() {
-    	System.out.println("初始化");
     }
     
 	public Integer getDelayingQueuePeriod() {

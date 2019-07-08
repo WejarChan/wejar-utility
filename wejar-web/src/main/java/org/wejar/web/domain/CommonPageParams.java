@@ -100,9 +100,9 @@ public class CommonPageParams implements Serializable {
 	 * @throws
 	 */
 	public boolean startPage(){
-		if(!isPaging()) {
-			return false;
-		}
+//		if(!isPaging()) {
+//			return false;
+//		}
 		if(this.pageNum == null){
 			this.pageNum = 1;
 		}

@@ -75,13 +75,43 @@ public class QrCodeDetectCapture {
 	}
 
 	public static void main(String[] args) {
-		String filePath = "/home/wejarchan/Desktop/10.jpg";
-		QrCodeDetectCapture qdc = new QrCodeDetectCapture();
-		long startTime = System.currentTimeMillis();
-		String path = qdc.qrCodeCorrection(filePath);
-		long endTime = System.currentTimeMillis();
-		System.out.println(endTime - startTime);
-		System.out.println(path);
+//		String filePath = "/home/wejarchan/Desktop/10.jpg";
+//		QrCodeDetectCapture qdc = new QrCodeDetectCapture();
+//		long startTime = System.currentTimeMillis();
+//		String path = qdc.qrCodeCorrection(filePath);
+//		long endTime = System.currentTimeMillis();
+//		System.out.println(endTime - startTime);
+//		System.out.println(path);
+		
+		File dir = new File("/home/wejarchan/Downloads/权益ui");
+		for(File file : dir.listFiles()) {
+			String path = file.getAbsolutePath();
+			
+			Mat src = Imgcodecs.imread(path, 1);
+			
+			// 图像太大，压缩至短边小于1500
+			if (Math.min(src.width(), src.height()) > 700) {
+				int width = src.width();
+				int height = src.height();
+				do {
+					width /= 2;
+					height /= 2;
+				} while (Math.min(width, height) > 1500);
+				
+				// 短边小于1500，重设图片大小
+				Imgproc.resize(src, src, new Size(width, height));
+			}
+			
+			Imgcodecs.imwrite(path,  src);
+
+		}
+
+		
+		
+		
+		
+		
+		
 	}
 
 	public String qrCodeCorrection(String qrcodePicPath) {
