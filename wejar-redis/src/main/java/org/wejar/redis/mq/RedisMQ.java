@@ -1,6 +1,5 @@
 package org.wejar.redis.mq;
 
-import java.util.Arrays;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -12,15 +11,13 @@ import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.data.redis.RedisProperties.Jedis;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.ListOperations;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
+import org.springframework.stereotype.Component;
 
 import com.alibaba.fastjson.JSON;
-
-import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.Transaction;
 
 /**
  * Redis MQ 实现类
@@ -28,13 +25,18 @@ import redis.clients.jedis.Transaction;
  * @author: WejarChan
  * @date:   2018年10月28日 下午11:14:37
  */
+@Component
 public class RedisMQ {
 
 	private final Logger logger = LoggerFactory.getLogger(RedisMQ.class);
 	
+	@Autowired
     private RedisTemplate<String,String> redisTemplate;
 
 	private Timer delayQueueObserver;
+	
+//	@Autowired
+//	private RedisMessageListenerContainer redisMessageListenerContainer;
 
 	private void init() {
 		this.delayQueueObserver = new Timer("redis MQ 延时队列观察者线程");
@@ -52,8 +54,7 @@ public class RedisMQ {
         }));  
 	}
 	
-	public RedisMQ(RedisTemplate<String,String> redisTemplate) {
-		this.redisTemplate = redisTemplate;
+	public RedisMQ() {
 		init();
 	}
 	
@@ -355,32 +356,39 @@ public class RedisMQ {
 		return 0;
 	}
 	
-	/**
-	 * 使用订阅者订阅消息
-	 * @param jedisPubSub - 监听任务
-	 * @param channels - 要监听的消息通道
-	 */
-	public void subscribe(RedisMQSubscriber subscriber, String... channels) {
-		if(subscriber == null) {
-			throw new IllegalArgumentException("subscriber 不能为null");
-		}
-		if(channels == null || channels.length <= 0	) {
-			throw new IllegalArgumentException("channels 不能为null,最小长度为1");
-		}
-		String apiName = "RedisMQ-subscribe";
-		
-		logger.debug("进入--{}，参数-subscriber:{},channels:{}",apiName,subscriber,Arrays.toString(channels));
-		Jedis jedis = this.jedisPool.getResource();
-		try {
-			redisTemplate.su
-			jedis.subscribe(subscriber, channels);
-			logger.debug("{}--消息订阅成功。");
-		}catch(Exception e) {
-			logger.error("{}--消息订阅发生异常，原因:{}",apiName,e.getMessage());
-		} finally {
-			jedis.close();
-		}
-	}
+	
+	
+
+	
+	
+	
+	
+//	/**
+//	 * 使用订阅者订阅消息
+//	 * @param jedisPubSub - 监听任务
+//	 * @param channels - 要监听的消息通道
+//	 */
+//	public void subscribe(RedisMQSubscriber subscriber, String... channels) {
+//		if(subscriber == null) {
+//			throw new IllegalArgumentException("subscriber 不能为null");
+//		}
+//		if(channels == null || channels.length <= 0	) {
+//			throw new IllegalArgumentException("channels 不能为null,最小长度为1");
+//		}
+//		String apiName = "RedisMQ-subscribe";
+//		
+//		logger.debug("进入--{}，参数-subscriber:{},channels:{}",apiName,subscriber,Arrays.toString(channels));
+//		Jedis jedis = this.jedisPool.getResource();
+//		try {
+//			redisTemplate.su
+//			jedis.subscribe(subscriber, channels);
+//			logger.debug("{}--消息订阅成功。");
+//		}catch(Exception e) {
+//			logger.error("{}--消息订阅发生异常，原因:{}",apiName,e.getMessage());
+//		} finally {
+//			jedis.close();
+//		}
+//	}
 	
 	/**
 	 * 生产消费模式-消费者
@@ -406,19 +414,20 @@ public class RedisMQ {
 	public RedisMQSubscriber createMQSubscriber(RedisMQWorker worker) {
 		return new RedisMQSubscriber(worker);
 	}
-	/**
-	 * 发布订阅模式-订阅者
-	 * 创建一个订阅 channel的 redis MQ 订阅者
-	 * @Title: createMQSubscriber   
-	 * @param worker
-	 * @param channel
-	 * @return RedisMQSubscriber      
-	 * @throws
-	 */
-	public RedisMQSubscriber createMQSubscriber(RedisMQWorker worker,String channel) {
-		RedisMQSubscriber subscriber = new RedisMQSubscriber(worker);
-		subscribe(subscriber,channel);
-		return subscriber;
-	}
+	
+//	/**
+//	 * 发布订阅模式-订阅者
+//	 * 创建一个订阅 channel的 redis MQ 订阅者
+//	 * @Title: createMQSubscriber   
+//	 * @param worker
+//	 * @param channel
+//	 * @return RedisMQSubscriber      
+//	 * @throws
+//	 */
+//	public RedisMQSubscriber createMQSubscriber(RedisMQWorker worker,String channel) {
+//		RedisMQSubscriber subscriber = new RedisMQSubscriber(worker);
+//		subscribe(subscriber,channel);
+//		return subscriber;
+//	}
 	
 }

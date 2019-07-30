@@ -1,15 +1,13 @@
 package org.wejar.redis.lock;
 
-import java.io.Serializable;
-import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.alibaba.fastjson.JSON;
-
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.stereotype.Component;
 
 /**
  * 
@@ -21,18 +19,15 @@ import redis.clients.jedis.JedisPool;
  */
 public class RedisLock {
 
-    private static final String DEFAULT_KEY_PREFIX = "WEJAR:LOCK:";
-
 	private static Logger logger = LoggerFactory.getLogger(RedisLock.class);
 
-    private JedisPool jedisPool;
-    
-    private LockKeyNamingRule lockKeyNamingRule;
+	private RedisTemplate<String, String> redisTemplate;
 
-    public RedisLock(JedisPool jedisPool) {
-    	this.jedisPool = jedisPool;
-    }
-    
+    public RedisLock(RedisTemplate<String, String> redisTemplate) {
+		super();
+		this.redisTemplate = redisTemplate;
+	}
+
     /**
      * 获取锁,参数可选
      * @param key			
@@ -41,11 +36,10 @@ public class RedisLock {
      */
     public boolean lock(String key,Long expiresMillis){
     	//分布式锁的key规则
-    	Jedis jedis = this.jedisPool.getResource();
-    	key = processKey(key);
     	logger.debug("RedisLock locking key:{},expiresMillis:{}",key,expiresMillis);
-    	boolean result = this.setNX(jedis,key, "LOCK" ,expiresMillis);
-    	jedis.close();
+    	ValueOperations<String, String> ops = this.redisTemplate.opsForValue();
+    	Boolean result = this.redisTemplate.opsForValue().setIfAbsent("key", "LOCK");
+    	this.redisTemplate.expire(key, expiresMillis, TimeUnit.MILLISECONDS);
     	return result;
     }
 
@@ -69,59 +63,8 @@ public class RedisLock {
      */
     public void unlock(String key){
     	//分布式锁的key规则
-    	key = processKey(key);
-    	Jedis jedis = this.jedisPool.getResource();
-    	jedis.del(key);
-    	jedis.close();
+    	this.redisTemplate.delete(key);
     }
     
-    /**
-     * 锁key规则
-    * @Title: processKeyRule 
-    * @param key
-    * @return
-    * @throws
-     */
-    private String processKey(String key){
-    	if(this.lockKeyNamingRule == null){
-    		this.lockKeyNamingRule = new PrefixLockKeyNamingRule(DEFAULT_KEY_PREFIX);
-    	}
-    	return this.lockKeyNamingRule.processName(key);
-    }
-    
-
-    @SuppressWarnings("unused")
-	private boolean setNX(Jedis jedis,final String key, final String value) {
-    	String json = JSON.toJSONString(value);
-    	Long count = jedis.setnx(key, json);
-    	return count == 1;
-    }
-    
-	@SuppressWarnings("unused")
-	private String getSet(Jedis jedis,final String key, final String value) {
-    	String oldValue = jedis.getSet(key, value);
-        return oldValue;
-	}
-
-	private boolean setNX(Jedis jedis, final String key, String value,final Long expiresMillis) {
-		Long count = jedis.setnx(key, value);
-		if(count == 1 && expiresMillis != null) {
-			jedis.pexpire(key, expiresMillis);
-		}
-		return count == 1;
-    }
-
-	@SuppressWarnings("unused")
-	private String getSet(Jedis jedis,final String key, final String value,final Long expiresMillis) {
-    	String oldValue = jedis.getSet(key, value);
-    	if(expiresMillis != null){
-    		jedis.pexpire(key, expiresMillis);
-    	}
-        return oldValue;
-    }
-    
-	public void setLockKeyNamingRule(LockKeyNamingRule lockKeyNamingRule) {
-		this.lockKeyNamingRule = lockKeyNamingRule;
-	}
 }
 
