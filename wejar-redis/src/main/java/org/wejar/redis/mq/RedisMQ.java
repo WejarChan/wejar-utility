@@ -12,10 +12,13 @@ import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.data.redis.RedisProperties.Jedis;
+import org.springframework.data.redis.core.ListOperations;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
 import com.alibaba.fastjson.JSON;
 
-import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.Transaction;
 
@@ -29,7 +32,7 @@ public class RedisMQ {
 
 	private final Logger logger = LoggerFactory.getLogger(RedisMQ.class);
 	
-    private JedisPool jedisPool;
+    private RedisTemplate<String,String> redisTemplate;
 
 	private Timer delayQueueObserver;
 
@@ -49,8 +52,8 @@ public class RedisMQ {
         }));  
 	}
 	
-	public RedisMQ(JedisPool jedisPool) {
-		this.jedisPool = jedisPool;
+	public RedisMQ(RedisTemplate<String,String> redisTemplate) {
+		this.redisTemplate = redisTemplate;
 		init();
 	}
 	
@@ -65,15 +68,14 @@ public class RedisMQ {
 		String waitQueue = RedisMQKeys.WAIT_PREFIX + channel;
 		logger.debug("进入--{},参数-channel:{},message:{}",apiName,channel,message);
 		
-		Jedis jedis = this.jedisPool.getResource();
+		ListOperations<String, String> opList = this.redisTemplate.opsForList();
+		
 		long count = 0;
 		try {
-    		count = jedis.lpush(waitQueue, message);
+    		count = opList.leftPush(waitQueue, message);
     		logger.debug("{}--保存消息成功，存放队列-队列名:{}",apiName,waitQueue);
     	}catch(Exception e) {
     		logger.error("{}--保存消息异常。原因:{}",apiName,e.getMessage());
-    	}finally {
-    		jedis.close();
     	}
 		return count > 0;
 	}
@@ -92,16 +94,14 @@ public class RedisMQ {
 		String apiName = "RedisMQ-comsume";
 		logger.debug("进入--{}，参数-channel:{}",apiName,channel);
 		String waitQueue = RedisMQKeys.WAIT_PREFIX + channel;
-		Jedis jedis = this.jedisPool.getResource();
+		ListOperations<String, String> opList = this.redisTemplate.opsForList();
 		String message = null;
 		try {
 			logger.debug("{}--开始从等待队列获取消息，队列名:{}",apiName,waitQueue);
-			message = jedis.rpop(waitQueue);
+			message = opList.rightPop(waitQueue);
 			logger.debug("{}--获取消息成功。channel:{},message:{}",apiName,channel,message);
 		}catch(Exception e) {
 			logger.error("{}--获取消息发生异常。原因:{}",apiName,e.getMessage());
-		}finally {
-			jedis.close();
 		}
 		return message;
 	}
@@ -126,15 +126,13 @@ public class RedisMQ {
     	
     	logger.debug("进入--{}，参数-channel:{},message:{}",apiName,channel,message);
     	
-    	Jedis jedis = this.jedisPool.getResource();
-    	long count = 0;
+		
+		long count = 0;
     	try {
-    		count = jedis.publish(channel, message);
+    		redisTemplate.convertAndSend(channel, message);
     		logger.debug("{}--发布消息成功! channel:{}",apiName,channel);
     	}catch(Exception e) {
     		logger.error("{}--发布消息异常。原因:{}",apiName,e.getMessage());
-    	}finally {
-    		jedis.close();
     	}
     	return count > 0;
     }
@@ -154,17 +152,14 @@ public class RedisMQ {
     	
     	logger.debug("进入--{},参数-messageId:{}",apiName,messageId);
     	
-    	Jedis jedis = this.jedisPool.getResource();
-    	Long count = 0L;
+    	Boolean deleted = null;
     	try {
-    		count = jedis.del(RedisMQKeys.DELAY_POOL + messageId);
+    		deleted = redisTemplate.delete(RedisMQKeys.DELAY_POOL + messageId);
     		logger.debug("{}--取消延时消息成功! messageId:{}",apiName,messageId);
     	}catch(Exception e) {
     		logger.error("{}--取消延时消息异常。原因:{}",apiName,e.getMessage());
-    	}finally {
-    		jedis.close();
     	}
-    	return count > 0;
+    	return deleted;
     }
     
     public boolean produceDelayMessage(String channel,String message,Date expectTime) {
@@ -183,7 +178,7 @@ public class RedisMQ {
 		}
 		String apiName = "RedisMQ-produceDelayMessage";
 		logger.debug("进入--{},参数-channel:{},message:{},expectTime:{},messageId:{}",apiName,channel,message,expectTime,messageId);
-		Jedis jedis = this.jedisPool.getResource();
+		
 		try {
 			if(expectTime.getTime()/1000 <= System.currentTimeMillis()/1000) {
 				//小于等于当前时间,则存放到waiting队列
@@ -200,21 +195,19 @@ public class RedisMQ {
 				messageId = UUID.randomUUID().toString();
 				logger.debug("{}--messageId 为空，自动生成messageId:{}",apiName,messageId);
 			}
-			Transaction trans = jedis.multi();
+			this.redisTemplate.multi();
 			//存放进消息池中
 			String key = RedisMQKeys.DELAY_POOL + messageId;
-			trans.set(key, jsonDelayMsg);
+			this.redisTemplate.opsForValue().set(key, jsonDelayMsg);
 			logger.debug("{}--将消息存放进消息池成功。key:{}",apiName,key);
 			//存放进延时队列中
-			trans.zadd(RedisMQKeys.DELAY_QUEUE, score, messageId);
+			this.redisTemplate.opsForZSet().add(RedisMQKeys.DELAY_QUEUE, messageId, score);
 			logger.debug("{}--将消息存放进延时队列成功，队列名:{}",apiName,RedisMQKeys.DELAY_QUEUE);
-			List<Object> results = trans.exec();
+			List<Object> results = this.redisTemplate.exec();
 			logger.debug("{}--执行事物完成,事物结果:{}",apiName,results);
 			return results != null ;
 		}catch(Exception e) {
 			logger.error("{}--生产延时消息发生异常。原因:{}",apiName,e.getMessage());
-		}finally {
-			jedis.close();
 		}
 		return false;
 	}
@@ -297,10 +290,9 @@ public class RedisMQ {
 	public int flushExpriedDelayingMsg() {
 		String apiName = "RedisMQ-flushExpiredDelayingMsg";
 		logger.debug("进入--{}",apiName);
-		Jedis jedis = this.jedisPool.getResource();
 		try {
 			long currSec = System.currentTimeMillis()/1000;
-			Set<String> timeoutSet = jedis.zrangeByScore(RedisMQKeys.DELAY_QUEUE, 0d, currSec);
+			Set<String> timeoutSet = this.redisTemplate.opsForZSet().rangeByScore(RedisMQKeys.DELAY_QUEUE, 0d, currSec);
 			if(timeoutSet == null || timeoutSet.isEmpty()) {
 				logger.debug("{}--无超时消息，退出。当前时间:{}秒",apiName,currSec);
 				return 0;
@@ -312,14 +304,13 @@ public class RedisMQ {
 			Iterator<String> it = timeoutSet.iterator();
 			while(it.hasNext()) {
 				String messageId = it.next();
-				
-				String jsonMsg = jedis.get(RedisMQKeys.DELAY_POOL+messageId);
+				String jsonMsg = redisTemplate.opsForValue().get(RedisMQKeys.DELAY_POOL+messageId);
 				if(jsonMsg == null || jsonMsg.trim().length() <= 0) {
 					logger.debug("{}--获得消息内容为空,抛弃该消息。messageId:{}",apiName,messageId);
-					Transaction trans = jedis.multi();
-					trans.del(RedisMQKeys.DELAY_POOL + messageId);
-					trans.zrem(RedisMQKeys.DELAY_QUEUE, messageId);
-					List<Object> results = trans.exec();
+					redisTemplate.multi();
+					redisTemplate.delete(RedisMQKeys.DELAY_POOL + messageId);
+					redisTemplate.opsForZSet().remove(RedisMQKeys.DELAY_QUEUE, messageId);
+					List<Object> results = redisTemplate.exec();
 					if(results != null) {
 						++removeCount;
 					}
@@ -331,22 +322,22 @@ public class RedisMQ {
 				}catch(Exception e) {
 					logger.debug("{}--解析[延时消息]异常,抛弃该消息。messageId:{}",apiName,messageId);
 					//删除消息
-					Transaction trans = jedis.multi();
-					trans.del(RedisMQKeys.DELAY_POOL + messageId);
-					trans.zrem(RedisMQKeys.DELAY_QUEUE, messageId);
-					List<Object> results = trans.exec();
+					redisTemplate.multi();
+					redisTemplate.delete(RedisMQKeys.DELAY_POOL + messageId);
+					redisTemplate.opsForZSet().remove(RedisMQKeys.DELAY_QUEUE, messageId);
+					List<Object> results = redisTemplate.exec();
 					if(results != null) {
 						++removeCount;
 					}
 					continue;
 				}
 				logger.debug("{}--获取[延时消息]成功。channel:{},createTime:{},messageId:{}",apiName,delayMsg.getChannel(),delayMsg.getCreateTime(),messageId);
-				Transaction trans = jedis.multi();
+				redisTemplate.multi();
 				String waitQueue = RedisMQKeys.WAIT_PREFIX + delayMsg.getChannel();
-				trans.del(RedisMQKeys.DELAY_POOL + messageId);
-				trans.lpush(waitQueue, delayMsg.getBody());
-				trans.zrem(RedisMQKeys.DELAY_QUEUE, messageId);
-				List<Object> results = trans.exec();
+				redisTemplate.delete(RedisMQKeys.DELAY_POOL + messageId);
+				redisTemplate.opsForList().leftPush(waitQueue, delayMsg.getBody());
+				redisTemplate.opsForZSet().remove(RedisMQKeys.DELAY_QUEUE, messageId);
+				List<Object> results = redisTemplate.exec();
 				if(results != null) {
 					++successCount;
 					logger.debug("{}--消息转存到待消费队列成功! 队列名:{}",apiName,waitQueue);
@@ -359,8 +350,6 @@ public class RedisMQ {
 			
 		}catch(Exception e) {
 			logger.error("{}--观察处理延时消息异常，原因:{}",apiName,e.getMessage());
-		}finally {
-			jedis.close();
 		}
 		
 		return 0;
@@ -383,6 +372,7 @@ public class RedisMQ {
 		logger.debug("进入--{}，参数-subscriber:{},channels:{}",apiName,subscriber,Arrays.toString(channels));
 		Jedis jedis = this.jedisPool.getResource();
 		try {
+			redisTemplate.su
 			jedis.subscribe(subscriber, channels);
 			logger.debug("{}--消息订阅成功。");
 		}catch(Exception e) {
@@ -402,7 +392,7 @@ public class RedisMQ {
 	 * @throws
 	 */
 	public RedisMQComsumer createMQComsumer(RedisMQWorker worker,String channel) {
-		return new RedisMQComsumer(this.jedisPool, channel, worker);
+		return new RedisMQComsumer(this.redisTemplate, channel, worker);
 	}
 	
 	/**

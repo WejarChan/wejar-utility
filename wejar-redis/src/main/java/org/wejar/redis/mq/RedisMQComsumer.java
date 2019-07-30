@@ -4,10 +4,7 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.Transaction;
+import org.springframework.data.redis.core.RedisTemplate;
 
 /**
  *  Redis MQ 生产-消费 消费者
@@ -23,7 +20,7 @@ public class RedisMQComsumer extends Thread {
 	private String waitQueue;
 	private String workQueue;
 	
-    private JedisPool jedisPool;
+    private RedisTemplate<String, String> redisTemplate;
 	
 	private RedisMQWorker worker;
 	
@@ -50,9 +47,9 @@ public class RedisMQComsumer extends Thread {
 	}
 
 
-	protected RedisMQComsumer(JedisPool jedisPool,String channel,RedisMQWorker worker) {
+	protected RedisMQComsumer(RedisTemplate<String,String> redisTemplate,String channel,RedisMQWorker worker) {
 		super(worker.getName());
-		this.jedisPool = jedisPool;
+		this.redisTemplate = redisTemplate;
 		this.channel = channel;
 		this.waitQueue = RedisMQKeys.WAIT_PREFIX + channel;
 		this.workQueue = RedisMQKeys.WORK_PREFIX + channel;
@@ -63,12 +60,11 @@ public class RedisMQComsumer extends Thread {
 	public void run() {
 		String apiName = "RedisMQComsumer-comsume";
 		while(running) {
-			Jedis jedis = this.jedisPool.getResource();
 			try {
 				logger.debug("{}--开始从等待队列获取消息，队列名：{},channel:{}",apiName,waitQueue,this.channel);
 				String message = null;
 				try {
-					message = jedis.brpoplpush(waitQueue, workQueue, 0);
+					message = this.redisTemplate.opsForList().rightPopAndLeftPush(waitQueue, workQueue);
 					logger.debug("{}--获取消息成功！message:{}",apiName,message);
 				}catch(Exception e) {
 					logger.error("{}--获取消息超时!继续执行。",apiName);
@@ -82,7 +78,7 @@ public class RedisMQComsumer extends Thread {
 					logger.error("{}--调用worker执行任务发生异常，原因：{}",apiName,e.getMessage() != null ? e.getMessage() : e.getClass());
 				}
 				if(finished) {
-					jedis.lrem(workQueue, -1, message);
+					this.redisTemplate.opsForList().remove(workQueue, -1, message);
 					logger.debug("{}--worker执行任务成功，从工作队列移除消息。队列名:{}",apiName,workQueue);
 				}else {
 					logger.info("{}--worker执行任务失败，开始转移消息至等待队列。",apiName);
@@ -94,8 +90,6 @@ public class RedisMQComsumer extends Thread {
 				}
 			}catch(Exception e) {
 				logger.error("{}--消费消息发生异常。原因:{},channel:{}",apiName,e.getMessage() != null ? e.getMessage() : e.getClass(),channel);
-			}finally {
-				jedis.close();
 			}
 		}
 	}
@@ -103,12 +97,11 @@ public class RedisMQComsumer extends Thread {
 	private void sendMessageBack2waitQueue(final String message) {
 		String apiName = "sendMessageBack2waitQueue";
 		logger.debug("进入--{},参数-message:{},channel:{}",apiName,message,channel);
-		Jedis jedis = this.jedisPool.getResource();
 		try {
-			Transaction trans = jedis.multi();
-			trans.lrem(workQueue, -1, message);
-			trans.lpush(waitQueue, message);
-			List<Object> resultList = trans.exec();
+			this.redisTemplate.multi();
+			this.redisTemplate.opsForList().remove(workQueue, -1, message);
+			this.redisTemplate.opsForList().leftPush(waitQueue, message);
+			List<Object> resultList = this.redisTemplate.exec();
 			String result = (String) resultList.get(0);
 			if(result.equalsIgnoreCase("TRUE")) {
 				logger.debug("{}--事物执行成功,消息存放至等待队列-队列名：{}",apiName,waitQueue);
@@ -117,8 +110,6 @@ public class RedisMQComsumer extends Thread {
 			}
 		}catch(Exception e) {
 			logger.error("{}--发生异常。原因:{}",apiName,e.getMessage() != null ? e.getMessage() : e.getClass());
-		}finally {
-			jedis.close();
 		}
 	}
 

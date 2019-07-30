@@ -70,41 +70,42 @@ public class QrCodeDetectCapture {
 			System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 			hasLoadOpencv = true;
 		} catch (Throwable e) {
+			e.printStackTrace();
 			logger.info("加载opencv_341失败，找不到库文件。");
 		}
 	}
 
 	public static void main(String[] args) {
-//		String filePath = "/home/wejarchan/Desktop/10.jpg";
-//		QrCodeDetectCapture qdc = new QrCodeDetectCapture();
-//		long startTime = System.currentTimeMillis();
-//		String path = qdc.qrCodeCorrection(filePath);
-//		long endTime = System.currentTimeMillis();
-//		System.out.println(endTime - startTime);
-//		System.out.println(path);
+		String filePath = "/home/wejarchan/Desktop/0cf82301c6e1467d91b6cd04bdda08692.jpg";
+		QrCodeDetectCapture qdc = new QrCodeDetectCapture();
+		long startTime = System.currentTimeMillis();
+		String path = qdc.qrCodeCorrection(filePath);
+		long endTime = System.currentTimeMillis();
+		System.out.println(endTime - startTime);
+		System.out.println(path);
 		
-		File dir = new File("/home/wejarchan/Downloads/权益ui");
-		for(File file : dir.listFiles()) {
-			String path = file.getAbsolutePath();
-			
-			Mat src = Imgcodecs.imread(path, 1);
-			
-			// 图像太大，压缩至短边小于1500
-			if (Math.min(src.width(), src.height()) > 700) {
-				int width = src.width();
-				int height = src.height();
-				do {
-					width /= 2;
-					height /= 2;
-				} while (Math.min(width, height) > 1500);
-				
-				// 短边小于1500，重设图片大小
-				Imgproc.resize(src, src, new Size(width, height));
-			}
-			
-			Imgcodecs.imwrite(path,  src);
-
-		}
+//		File dir = new File("/home/wejarchan/Downloads/权益ui");
+//		for(File file : dir.listFiles()) {
+//			String path = file.getAbsolutePath();
+//			
+//			Mat src = Imgcodecs.imread(path, 1);
+//			
+//			// 图像太大，压缩至短边小于1500
+//			if (Math.min(src.width(), src.height()) > 700) {
+//				int width = src.width();
+//				int height = src.height();
+//				do {
+//					width /= 2;
+//					height /= 2;
+//				} while (Math.min(width, height) > 1500);
+//				
+//				// 短边小于1500，重设图片大小
+//				Imgproc.resize(src, src, new Size(width, height));
+//			}
+//			
+//			Imgcodecs.imwrite(path,  src);
+//
+//		}
 
 		
 		

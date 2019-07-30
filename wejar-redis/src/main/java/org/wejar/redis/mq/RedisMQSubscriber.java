@@ -2,9 +2,10 @@ package org.wejar.redis.mq;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.JedisPubSub;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.connection.Message;
+import org.springframework.data.redis.connection.MessageListener;
+import org.springframework.data.redis.core.RedisTemplate;
 
 
 /**
@@ -13,11 +14,14 @@ import redis.clients.jedis.JedisPubSub;
  * @author: WejarChan
  * @date:   2018年10月28日 下午11:09:31
  */
-public class RedisMQSubscriber extends JedisPubSub  {
+public class RedisMQSubscriber implements MessageListener {
 	
 	private final Logger logger = LoggerFactory.getLogger(RedisMQSubscriber.class);
 	
     private RedisMQWorker worker;
+    
+    @Autowired
+	private RedisTemplate<String, String> redisTemplate;
     
 	/**
      * 订阅接收发布者的消息
@@ -26,17 +30,18 @@ public class RedisMQSubscriber extends JedisPubSub  {
 		this.worker = worker;
 	}
 	
-    @Override
-    public void onMessage(String channel, String message) {       //收到消息会调用
-    	logger.debug("redis MQ 订阅者，接收到消息! channel:{},body:{}",channel,message);
-    	this.worker.work(message);
-    }
-    @Override
-    public void onSubscribe(String channel, int subscribedChannels) {    //订阅了频道会调用
-    	logger.debug("redis MQ 订阅者，订阅了频道! channel:{},订阅频道数量{}",channel,subscribedChannels);
-    }
-    @Override
-    public void onUnsubscribe(String channel, int subscribedChannels) {   //取消订阅 会调用
-    	logger.debug("redis MQ 订阅者，取消订阅了频道! channel:{},订阅频道数量{}",channel,subscribedChannels);
-    }
+	@Override
+	public void onMessage(Message message, byte[] pattern) {
+		byte[] body = message.getBody();
+		String msgBody = (String) redisTemplate.getValueSerializer().deserialize(body);
+		System.out.println(msgBody);
+		byte[] channel = message.getChannel();
+		String msgChannel = (String) redisTemplate.getValueSerializer().deserialize(channel);
+		System.out.println(msgChannel);
+		String msgPattern = new String(pattern);
+		System.out.println(msgPattern);
+		// TODO Auto-generated method stub
+		logger.debug("redis MQ 订阅者，接收到消息! channel:{},body:{}",channel,message);
+    	this.worker.work(msgBody);
+	}
 }
