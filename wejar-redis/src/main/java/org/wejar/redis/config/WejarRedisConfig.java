@@ -37,25 +37,26 @@ public class WejarRedisConfig implements BeanPostProcessor{
     }
     
     @Bean
+    @ConfigurationProperties(prefix="wejar.redis") 
     public RedisLock redisLock(RedisTemplate<String, String> redisTemplate) {
     	RedisLock lock = new RedisLock(redisTemplate);
     	return lock;
     }
     
     
-//    @Bean
-//    @ConditionalOnProperty(prefix="wejar.redis",name= {"enableMQ"})
-//    public RedisMQ redisMQ(RedisConfigProp redisConfigProp,RedisTemplate<String, String> redisTemplate) {
-//    	logger.info("init RedisMQ...");
-//    	RedisMQ redisMQ = new RedisMQ(redisTemplate);
-//    	if(redisConfigProp.getDelayingQueuePeriod() != null) {
-//    		if(redisConfigProp.getDelayingQueuePeriod() < 1) {
-//    			throw new IllegalArgumentException("Redis MQ 初始化参数 delayingQueuePeriod 必须大于 1");
-//    		}
-//    		redisMQ.startObserver(redisConfigProp.getDelayingQueuePeriod());
-//    	}
-//    	return redisMQ;
-//    }
+    @Bean
+    @ConditionalOnProperty(prefix="wejar.redis",name= {"enableMQ"})
+    public RedisMQ redisMQ(RedisConfigProp redisConfigProp,RedisTemplate<String, String> redisTemplate) {
+    	logger.info("init RedisMQ...");
+    	RedisMQ redisMQ = new RedisMQ(redisTemplate);
+    	if(redisConfigProp.getDelayingQueuePeriod() != null) {
+    		if(redisConfigProp.getDelayingQueuePeriod() < 1) {
+    			throw new IllegalArgumentException("Redis MQ 初始化参数 delayingQueuePeriod 必须大于 1");
+    		}
+    		redisMQ.startObserver(redisConfigProp.getDelayingQueuePeriod());
+    	}
+    	return redisMQ;
+    }
     
 
     

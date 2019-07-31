@@ -25,12 +25,10 @@ import com.alibaba.fastjson.JSON;
  * @author: WejarChan
  * @date:   2018年10月28日 下午11:14:37
  */
-@Component
 public class RedisMQ {
 
 	private final Logger logger = LoggerFactory.getLogger(RedisMQ.class);
 	
-	@Autowired
     private RedisTemplate<String,String> redisTemplate;
 
 	private Timer delayQueueObserver;
@@ -54,7 +52,8 @@ public class RedisMQ {
         }));  
 	}
 	
-	public RedisMQ() {
+	public RedisMQ(RedisTemplate<String,String> redisTemplate) {
+		this.redisTemplate = redisTemplate;
 		init();
 	}
 	

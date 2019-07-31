@@ -1,6 +1,7 @@
 package org.wejar.redis.mq;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,7 +65,7 @@ public class RedisMQComsumer extends Thread {
 				logger.debug("{}--开始从等待队列获取消息，队列名：{},channel:{}",apiName,waitQueue,this.channel);
 				String message = null;
 				try {
-					message = this.redisTemplate.opsForList().rightPopAndLeftPush(waitQueue, workQueue);
+					message = this.redisTemplate.opsForList().rightPopAndLeftPush(waitQueue, workQueue,10L,TimeUnit.SECONDS);
 					logger.debug("{}--获取消息成功！message:{}",apiName,message);
 				}catch(Exception e) {
 					logger.error("{}--获取消息超时!继续执行。",apiName);

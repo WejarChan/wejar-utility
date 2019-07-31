@@ -37,8 +37,10 @@ public class RedisLock {
     public boolean lock(String key,Long expiresMillis){
     	//分布式锁的key规则
     	logger.debug("RedisLock locking key:{},expiresMillis:{}",key,expiresMillis);
-    	ValueOperations<String, String> ops = this.redisTemplate.opsForValue();
-    	Boolean result = this.redisTemplate.opsForValue().setIfAbsent("key", "LOCK");
+    	Boolean result = this.redisTemplate.opsForValue().setIfAbsent(key, "LOCK");
+    	if(null == expiresMillis) {
+    		expiresMillis = 60 * 60 * 1000L;
+    	}
     	this.redisTemplate.expire(key, expiresMillis, TimeUnit.MILLISECONDS);
     	return result;
     }
