@@ -1,14 +1,19 @@
 package org.wejar.redis.config;
 
+import java.util.Arrays;
+import java.util.Collections;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.BeanPostProcessor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.listener.PatternTopic;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
+import org.springframework.data.redis.listener.adapter.MessageListenerAdapter;
 import org.wejar.redis.lock.RedisLock;
 import org.wejar.redis.mq.RedisMQ;
 
@@ -20,16 +25,15 @@ public class WejarRedisConfig implements BeanPostProcessor{
 //	@Autowired
 //    private RedisConfigProp redisCofigProp;
     
-    @Value("${wejar.redis.delayingQueuePeriod}")
+    @Value("${wejar.redis.delayingQueuePeriod:30}")
     private Integer delayingQueuePeriod;
 
     
     public WejarRedisConfig(){
-        logger.info("init RedisConfig...");
+        logger.debug("init RedisConfig...");
     }
     
     @Bean
-    @ConfigurationProperties(prefix="wejar.redis") 
     public RedisConfigProp redisConfigProp() {
     	RedisConfigProp prop = new RedisConfigProp();
     	prop.setDelayingQueuePeriod(delayingQueuePeriod);
@@ -37,7 +41,6 @@ public class WejarRedisConfig implements BeanPostProcessor{
     }
     
     @Bean
-    @ConfigurationProperties(prefix="wejar.redis") 
     public RedisLock redisLock(RedisTemplate<String, String> redisTemplate) {
     	RedisLock lock = new RedisLock(redisTemplate);
     	return lock;
@@ -45,7 +48,13 @@ public class WejarRedisConfig implements BeanPostProcessor{
     
     
     @Bean
-    @ConditionalOnProperty(prefix="wejar.redis",name= {"enableMQ"})
+    RedisMessageListenerContainer container(RedisConnectionFactory connectionFactory) {
+        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+        container.setConnectionFactory(connectionFactory);
+        return container;
+    }
+    
+    @Bean
     public RedisMQ redisMQ(RedisConfigProp redisConfigProp,RedisTemplate<String, String> redisTemplate) {
     	logger.info("init RedisMQ...");
     	RedisMQ redisMQ = new RedisMQ(redisTemplate);

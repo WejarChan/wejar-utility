@@ -5,7 +5,10 @@ import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.SessionCallback;
 
 /**
  *  Redis MQ 生产-消费 消费者
@@ -15,7 +18,7 @@ import org.springframework.data.redis.core.RedisTemplate;
  */
 public class RedisMQComsumer extends Thread {
 
-	private final Logger logger = LoggerFactory.getLogger(RedisMQSubscriber.class);
+	private final Logger logger = LoggerFactory.getLogger(RedisMQComsumer.class);
 	
 	private String channel;
 	private String waitQueue;
@@ -99,15 +102,21 @@ public class RedisMQComsumer extends Thread {
 		String apiName = "sendMessageBack2waitQueue";
 		logger.debug("进入--{},参数-message:{},channel:{}",apiName,message,channel);
 		try {
-			this.redisTemplate.multi();
-			this.redisTemplate.opsForList().remove(workQueue, -1, message);
-			this.redisTemplate.opsForList().leftPush(waitQueue, message);
-			List<Object> resultList = this.redisTemplate.exec();
-			String result = (String) resultList.get(0);
-			if(result.equalsIgnoreCase("TRUE")) {
+			Boolean result = redisTemplate.execute(new SessionCallback<Boolean>() {
+				@Override
+				@SuppressWarnings("rawtypes")
+				public Boolean execute(RedisOperations operations) throws DataAccessException {
+					redisTemplate.multi();
+					redisTemplate.opsForList().remove(workQueue, -1, message);
+					redisTemplate.opsForList().leftPush(waitQueue, message);
+					List<Object> resultList = redisTemplate.exec();
+					return resultList != null;
+				}
+			});
+			if(Boolean.TRUE.equals(result)) {
 				logger.debug("{}--事物执行成功,消息存放至等待队列-队列名：{}",apiName,waitQueue);
 			}else {
-				logger.error("{}--事物执行失败，事物结果：{}",resultList);
+				logger.error("{}--事物执行失败");
 			}
 		}catch(Exception e) {
 			logger.error("{}--发生异常。原因:{}",apiName,e.getMessage() != null ? e.getMessage() : e.getClass());

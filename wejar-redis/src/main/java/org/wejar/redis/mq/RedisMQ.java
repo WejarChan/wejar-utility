@@ -2,6 +2,7 @@ package org.wejar.redis.mq;
 
 import java.util.Date;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.Timer;
@@ -9,13 +10,17 @@ import java.util.TimerTask;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import javax.swing.event.ListSelectionEvent;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.ListOperations;
+import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.SessionCallback;
+import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
-import org.springframework.stereotype.Component;
 
 import com.alibaba.fastjson.JSON;
 
@@ -33,9 +38,6 @@ public class RedisMQ {
 
 	private Timer delayQueueObserver;
 	
-//	@Autowired
-//	private RedisMessageListenerContainer redisMessageListenerContainer;
-
 	private void init() {
 		this.delayQueueObserver = new Timer("redis MQ 延时队列观察者线程");
 		
@@ -113,7 +115,7 @@ public class RedisMQ {
      * @param channel  消息发布订阅 主题
      * @param message  消息信息    
      * @throws
-     */
+     *//*
     public boolean publish(String channel, String message) {
     	if(channel == null) {
 			throw new IllegalArgumentException("channel 不能为 null");
@@ -121,12 +123,8 @@ public class RedisMQ {
     	if(message == null) {
 			throw new IllegalArgumentException("message 不能为 null");
 		}
-    	
     	String apiName = "RedisMQ-publish";
-    	
     	logger.debug("进入--{}，参数-channel:{},message:{}",apiName,channel,message);
-    	
-		
 		long count = 0;
     	try {
     		redisTemplate.convertAndSend(channel, message);
@@ -135,7 +133,7 @@ public class RedisMQ {
     		logger.error("{}--发布消息异常。原因:{}",apiName,e.getMessage());
     	}
     	return count > 0;
-    }
+    }*/
     
     /**
      * 取消一个延时消息
@@ -195,17 +193,26 @@ public class RedisMQ {
 				messageId = UUID.randomUUID().toString();
 				logger.debug("{}--messageId 为空，自动生成messageId:{}",apiName,messageId);
 			}
-			this.redisTemplate.multi();
-			//存放进消息池中
-			String key = RedisMQKeys.DELAY_POOL + messageId;
-			this.redisTemplate.opsForValue().set(key, jsonDelayMsg);
-			logger.debug("{}--将消息存放进消息池成功。key:{}",apiName,key);
-			//存放进延时队列中
-			this.redisTemplate.opsForZSet().add(RedisMQKeys.DELAY_QUEUE, messageId, score);
-			logger.debug("{}--将消息存放进延时队列成功，队列名:{}",apiName,RedisMQKeys.DELAY_QUEUE);
-			List<Object> results = this.redisTemplate.exec();
-			logger.debug("{}--执行事物完成,事物结果:{}",apiName,results);
-			return results != null ;
+			
+			final String msgId = messageId;
+			Boolean result = redisTemplate.execute(new SessionCallback<Boolean>() {
+				@SuppressWarnings("rawtypes")
+				@Override
+				public Boolean execute(RedisOperations operations) throws DataAccessException {
+					redisTemplate.multi();
+					//存放进消息池中
+					String key = RedisMQKeys.DELAY_POOL + msgId;
+					redisTemplate.opsForValue().set(key, jsonDelayMsg);
+					logger.debug("{}--将消息存放进消息池成功。key:{}",apiName,key);
+					//存放进延时队列中
+					redisTemplate.opsForZSet().add(RedisMQKeys.DELAY_QUEUE, msgId, score);
+					logger.debug("{}--将消息存放进延时队列成功，队列名:{}",apiName,RedisMQKeys.DELAY_QUEUE);
+					List<Object> results = redisTemplate.exec();
+					logger.debug("{}--执行事物完成,事物结果:{}",apiName,results);
+					return results != null ;
+				}
+			});
+			return result;
 		}catch(Exception e) {
 			logger.error("{}--生产延时消息发生异常。原因:{}",apiName,e.getMessage());
 		}
@@ -307,11 +314,18 @@ public class RedisMQ {
 				String jsonMsg = redisTemplate.opsForValue().get(RedisMQKeys.DELAY_POOL+messageId);
 				if(jsonMsg == null || jsonMsg.trim().length() <= 0) {
 					logger.debug("{}--获得消息内容为空,抛弃该消息。messageId:{}",apiName,messageId);
-					redisTemplate.multi();
-					redisTemplate.delete(RedisMQKeys.DELAY_POOL + messageId);
-					redisTemplate.opsForZSet().remove(RedisMQKeys.DELAY_QUEUE, messageId);
-					List<Object> results = redisTemplate.exec();
-					if(results != null) {
+					Boolean result = redisTemplate.execute(new SessionCallback<Boolean>() {
+						@Override
+						@SuppressWarnings("rawtypes")
+						public Boolean execute(RedisOperations operations) throws DataAccessException {
+							redisTemplate.multi();
+							redisTemplate.delete(RedisMQKeys.DELAY_POOL + messageId);
+							redisTemplate.opsForZSet().remove(RedisMQKeys.DELAY_QUEUE, messageId);
+							List<Object> results = redisTemplate.exec();
+							return results != null;
+						}
+					});
+					if(Boolean.TRUE.equals(result)) {
 						++removeCount;
 					}
 					continue;
@@ -322,27 +336,44 @@ public class RedisMQ {
 				}catch(Exception e) {
 					logger.debug("{}--解析[延时消息]异常,抛弃该消息。messageId:{}",apiName,messageId);
 					//删除消息
-					redisTemplate.multi();
-					redisTemplate.delete(RedisMQKeys.DELAY_POOL + messageId);
-					redisTemplate.opsForZSet().remove(RedisMQKeys.DELAY_QUEUE, messageId);
-					List<Object> results = redisTemplate.exec();
-					if(results != null) {
+					Boolean result = redisTemplate.execute(new SessionCallback<Boolean>() {
+						@Override
+						@SuppressWarnings("rawtypes")
+						public Boolean execute(RedisOperations operations) throws DataAccessException {
+							redisTemplate.multi();
+							redisTemplate.delete(RedisMQKeys.DELAY_POOL + messageId);
+							redisTemplate.opsForZSet().remove(RedisMQKeys.DELAY_QUEUE, messageId);
+							List<Object> results = redisTemplate.exec();
+							return results != null;
+						}
+					});
+					if(Boolean.TRUE.equals(result)) {
 						++removeCount;
 					}
 					continue;
 				}
 				logger.debug("{}--获取[延时消息]成功。channel:{},createTime:{},messageId:{}",apiName,delayMsg.getChannel(),delayMsg.getCreateTime(),messageId);
-				redisTemplate.multi();
-				String waitQueue = RedisMQKeys.WAIT_PREFIX + delayMsg.getChannel();
-				redisTemplate.delete(RedisMQKeys.DELAY_POOL + messageId);
-				redisTemplate.opsForList().leftPush(waitQueue, delayMsg.getBody());
-				redisTemplate.opsForZSet().remove(RedisMQKeys.DELAY_QUEUE, messageId);
-				List<Object> results = redisTemplate.exec();
-				if(results != null) {
+				
+				final DelayMessage dMsg = delayMsg;
+				final String waitQueue = RedisMQKeys.WAIT_PREFIX + dMsg.getChannel();
+				Boolean result = redisTemplate.execute(new SessionCallback<Boolean>() {
+					@Override
+					@SuppressWarnings("rawtypes")
+					public Boolean execute(RedisOperations operations) throws DataAccessException {
+						redisTemplate.multi();
+						redisTemplate.delete(RedisMQKeys.DELAY_POOL + messageId);
+						redisTemplate.opsForList().leftPush(waitQueue, dMsg.getBody());
+						redisTemplate.opsForZSet().remove(RedisMQKeys.DELAY_QUEUE, messageId);
+						List<Object> results = redisTemplate.exec();
+						return results != null;
+
+					}
+				});
+				if(Boolean.TRUE.equals(result)) {
 					++successCount;
 					logger.debug("{}--消息转存到待消费队列成功! 队列名:{}",apiName,waitQueue);
 				}else {
-					logger.error("{}--消息转存到待消费队列失败，事物执行失败! 事物结果:{}",apiName,results);
+					logger.error("{}--消息转存到待消费队列失败，事物执行失败!",apiName);
 				}
 			}
 			logger.debug("{}--转存消息到待消费队列完成。成功转换 {} 条消息,抛弃 {} 条消息。",apiName,successCount,removeCount);
@@ -354,40 +385,6 @@ public class RedisMQ {
 		
 		return 0;
 	}
-	
-	
-	
-
-	
-	
-	
-	
-//	/**
-//	 * 使用订阅者订阅消息
-//	 * @param jedisPubSub - 监听任务
-//	 * @param channels - 要监听的消息通道
-//	 */
-//	public void subscribe(RedisMQSubscriber subscriber, String... channels) {
-//		if(subscriber == null) {
-//			throw new IllegalArgumentException("subscriber 不能为null");
-//		}
-//		if(channels == null || channels.length <= 0	) {
-//			throw new IllegalArgumentException("channels 不能为null,最小长度为1");
-//		}
-//		String apiName = "RedisMQ-subscribe";
-//		
-//		logger.debug("进入--{}，参数-subscriber:{},channels:{}",apiName,subscriber,Arrays.toString(channels));
-//		Jedis jedis = this.jedisPool.getResource();
-//		try {
-//			redisTemplate.su
-//			jedis.subscribe(subscriber, channels);
-//			logger.debug("{}--消息订阅成功。");
-//		}catch(Exception e) {
-//			logger.error("{}--消息订阅发生异常，原因:{}",apiName,e.getMessage());
-//		} finally {
-//			jedis.close();
-//		}
-//	}
 	
 	/**
 	 * 生产消费模式-消费者
@@ -401,32 +398,5 @@ public class RedisMQ {
 	public RedisMQComsumer createMQComsumer(RedisMQWorker worker,String channel) {
 		return new RedisMQComsumer(this.redisTemplate, channel, worker);
 	}
-	
-	/**
-	 * 发布订阅模式-订阅者
-	 * 创建一个订 redis MQ 订阅者
-	 * @Title: createMQSubscriber   
-	 * @param worker
-	 * @return RedisMQSubscriber      
-	 * @throws
-	 */
-	public RedisMQSubscriber createMQSubscriber(RedisMQWorker worker) {
-		return new RedisMQSubscriber(worker);
-	}
-	
-//	/**
-//	 * 发布订阅模式-订阅者
-//	 * 创建一个订阅 channel的 redis MQ 订阅者
-//	 * @Title: createMQSubscriber   
-//	 * @param worker
-//	 * @param channel
-//	 * @return RedisMQSubscriber      
-//	 * @throws
-//	 */
-//	public RedisMQSubscriber createMQSubscriber(RedisMQWorker worker,String channel) {
-//		RedisMQSubscriber subscriber = new RedisMQSubscriber(worker);
-//		subscribe(subscriber,channel);
-//		return subscriber;
-//	}
 	
 }
