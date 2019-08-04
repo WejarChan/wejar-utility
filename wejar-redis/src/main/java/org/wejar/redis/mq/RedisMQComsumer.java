@@ -71,7 +71,7 @@ public class RedisMQComsumer extends Thread {
 					message = this.redisTemplate.opsForList().rightPopAndLeftPush(waitQueue, workQueue,10L,TimeUnit.SECONDS);
 					logger.debug("{}--获取消息成功！message:{}",apiName,message);
 				}catch(Exception e) {
-					logger.error("{}--获取消息超时!继续执行。",apiName);
+					logger.debug("{}--获取消息超时!继续执行。",apiName);
 					continue;
 				}
 				logger.debug("{}--开始调用worker执行任务。workerClass:{}",apiName,worker.getClass().getName());
