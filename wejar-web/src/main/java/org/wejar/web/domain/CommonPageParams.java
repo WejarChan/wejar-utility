@@ -60,19 +60,6 @@ public class CommonPageParams implements Serializable {
 	}
 	
 	/**
-	 * 判断分页参数是否有设置分页
-	 * @Title: isPaging   
-	 * @return 分页参数是否有设置     
-	 * @throws
-	 */
-	public boolean isPaging() {
-		if(this.pageNum == null && this.pageSize == null){
-			return false;
-		}
-		return true;
-	}
-	
-	/**
 	 * 从Page读取分页参数
 	 * @Title: setPage   
 	 * @param page 分页信息     
