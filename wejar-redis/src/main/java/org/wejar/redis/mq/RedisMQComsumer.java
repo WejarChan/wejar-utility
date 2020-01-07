@@ -9,6 +9,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.SessionCallback;
+import org.springframework.util.StringUtils;
 
 /**
  *  Redis MQ 生产-消费 消费者
@@ -69,6 +70,9 @@ public class RedisMQComsumer extends Thread {
 				String message = null;
 				try {
 					message = this.redisTemplate.opsForList().rightPopAndLeftPush(waitQueue, workQueue,10L,TimeUnit.SECONDS);
+					if(StringUtils.isEmpty(message)) {
+						continue;
+					}
 					logger.debug("{}--获取消息成功！message:{}",apiName,message);
 				}catch(Exception e) {
 					logger.debug("{}--获取消息超时!继续执行。",apiName);
