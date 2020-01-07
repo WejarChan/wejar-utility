@@ -79,7 +79,7 @@ public class RedisMQComsumer extends Thread {
 				try {
 					finished = this.worker.work(message);
 				}catch(Exception e) {
-					logger.error("{}--调用worker执行任务发生异常，原因：{}",apiName,e.getMessage() != null ? e.getMessage() : e.getClass());
+					logger.error("{}--调用worker执行任务发生异常，原因：{}",apiName,e.getMessage(),e);
 				}
 				if(finished) {
 					this.redisTemplate.opsForList().remove(workQueue, -1, message);
@@ -89,11 +89,11 @@ public class RedisMQComsumer extends Thread {
 					try {
 						sendMessageBack2waitQueue(message);
 					}catch(Exception e) {
-						logger.error("{}--将失败任务重新存回等待队列异常，原因:{}",apiName,e.getMessage() != null ? e.getMessage() : e.getClass());
+						logger.error("{}--将失败任务重新存回等待队列异常，原因:{}",apiName,e.getMessage(),e);
 					}
 				}
 			}catch(Exception e) {
-				logger.error("{}--消费消息发生异常。原因:{},channel:{}",apiName,e.getMessage() != null ? e.getMessage() : e.getClass(),channel);
+				logger.error("{}--消费消息发生异常,channel:{}。原因:{}",apiName,channel,e.getMessage(),e);
 			}
 		}
 	}
@@ -119,7 +119,7 @@ public class RedisMQComsumer extends Thread {
 				logger.error("{}--事物执行失败");
 			}
 		}catch(Exception e) {
-			logger.error("{}--发生异常。原因:{}",apiName,e.getMessage() != null ? e.getMessage() : e.getClass());
+			logger.error("{}--发生异常。原因:{}",apiName,e.getMessage(),e);
 		}
 	}
 
